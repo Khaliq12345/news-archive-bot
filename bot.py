@@ -33,7 +33,7 @@ def save_data(item: DetailPage, article_url: str, base_url: str) -> None:
 
     # Convert to DataFrame (single row)
     df = pd.DataFrame(item_json, index=[0])
-    df.to_csv("test.csv", index=False)
+    # df.to_csv("test.csv", index=False)
     df = df.astype("object")
     df = df.replace(pd.NaT, None)
     row_data = df.iloc[0].tolist()
