@@ -1,0 +1,11 @@
+.env
+config
+.venv
+Cache
+Logs
+__init__.py
+__pycache__
+*.json
+*.ipynb
+*.csv
+*.md
