@@ -334,7 +334,7 @@ def start_browser(params: dict, domain_hash: str):
         logger.add(log_file, mode="w")
         p = sync_playwright().start()
         logger.info("Automated initiated")
-        browser = p.firefox.launch(headless=False)
+        browser = p.firefox.launch(headless=True)
         logger.info("Browser created")
         page = browser.new_page()
         logger.info("Page created")
