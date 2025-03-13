@@ -238,4 +238,5 @@ def main():
     the_app.main_page_ui()
 
 
-ui.run(reload=True, port=9900)
+if __name__ == "__main__":
+    ui.run(reload=True, port=80)
