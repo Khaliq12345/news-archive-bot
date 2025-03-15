@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 
 
-class ListingPage(BaseModel):
+class Single_ListingPage_Article(BaseModel):
     title: str | None = Field(
         alias="Title",
         description="Extract the title of the article, return None if not found",
@@ -14,6 +14,10 @@ class ListingPage(BaseModel):
         alias="Date",
         description="Extract the date of the article, return None if not found",
     )
+
+
+class Multi_ListingPage_Article(BaseModel):
+    data: list[Single_ListingPage_Article]
 
 
 class DetailPage(BaseModel):

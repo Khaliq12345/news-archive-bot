@@ -14,16 +14,7 @@ class App:
         self.archive_url = ""
         self.years_included = ""
         self.base_url = ""
-        self.listing_page_selector = ""
-        self.detail_page_selector = ""
-        self.next_page_selector = ""
         self.params = {}
-        self.pagination_type = ""
-        self.pagination_types = {
-            "numbered": "Numbered",
-            "load_more": "Load more",
-            "infinite_scroll": "Infinite Scroll",
-        }
         self.domain_hash = None
         self.create_running_dialog()
         self.oldest_date = ""
@@ -86,10 +77,6 @@ class App:
     def parse_inputs(self):
         self.params["archive_url"] = self.archive_url
         self.params["base_url"] = self.base_url
-        self.params["listing_page_selector"] = self.listing_page_selector
-        self.params["detail_page_selector"] = self.detail_page_selector
-        self.params["pagination_type"] = self.pagination_type
-        self.params["next_page_selector"] = self.next_page_selector
         self.params["oldest_date"] = self.oldest_date
         self.params["earliest_date"] = self.earliest_date
         self.params["primary_keywords"] = self.primary_keywords.split(";")
@@ -101,15 +88,9 @@ class App:
                 "oldest_date",
                 "earliest_date",
             ]:
-                if (x == "next_page_selector") and (
-                    (self.params["pagination_type"] == "infinite_scroll")
-                    or (self.params["pagination_type"] == "numbered")
-                ):
-                    pass
-                else:
-                    if not self.params[x]:
-                        self.show_validation_notif(f"Field is required: {x}")
-                        return False
+                if not self.params[x]:
+                    self.show_validation_notif(f"Field is required: {x}")
+                    return False
         return True
 
     def get_input(
@@ -183,11 +164,6 @@ class App:
                 validation = {"Valid url is required": lambda value: "http" in value}
                 self.get_input("Archive Url", "archive_url", validation=validation)
                 self.get_input("Base Url", "base_url")
-                self.get_input("Listing Page Selector", "listing_page_selector")
-                self.get_input("Next Page Selector", "next_page_selector").props(
-                    """hint='only for load_more pagination archives' autogrow"""
-                )
-                self.get_input("Detail Page Selector", "detail_page_selector")
                 self.get_input(
                     "Primary Keywords", "primary_keywords", placeholder="Arrest;Bodycam"
                 ).props("""hint='seperate multiple by ";"' autogrow""")
@@ -196,22 +172,17 @@ class App:
                     "secondary_keywords",
                     placeholder="Mother;Father",
                 ).props("""hint='seperate multiple by ";"' autogrow""")
-                with ui.element("div").classes("w-5/6 bg-yellow p-2"):
-                    ui.label("Select Pagination type")
-                    ui.radio(self.pagination_types).bind_value(
-                        self, "pagination_type"
-                    ).props("inline")
                 with ui.row().classes("w-5/6"):
                     self.get_input(
-                        "Oldest Date",
-                        "oldest_date",
-                        placeholder="January 12th 2024",
+                        "Date to start from",
+                        "earliest_date",
+                        placeholder="January 12th 2025",
                         width="w-2/5",
                     )
                     self.get_input(
-                        "Earliest Date",
-                        "earliest_date",
-                        placeholder="January 12th 2025",
+                        "Date to end at",
+                        "oldest_date",
+                        placeholder="January 12th 2024",
                         width="w-2/5",
                     )
                 with ui.row().classes("w-5/6"):
@@ -238,4 +209,4 @@ def main():
     the_app.main_page_ui()
 
 
-ui.run(reload=True, port=80)
+ui.run(reload=True, port=8080)

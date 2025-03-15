@@ -1,67 +1,48 @@
 import os
-import json
 import re
 import concurrent.futures
 from datetime import datetime
 from urllib.parse import urljoin
 
-import pandas as pd
 from playwright.sync_api import sync_playwright, Page
-from selectolax.parser import HTMLParser, Node
+from selectolax.parser import HTMLParser
 from dotenv import load_dotenv
 from loguru import logger
 from dateparser import parse
-import openai
+from pydantic import BaseModel
+from google import genai
+from google.genai import types
+import json_repair
 
-from utilities import utils, gsheet_utils
-from model.model import DetailPage
+from utilities import utils
+from model.model import DetailPage, Multi_ListingPage_Article
 
 load_dotenv()
 
 DATE_NOW = datetime.now().strftime("%Y-%m-%d")
 API_KEY = os.getenv("OPENAI_KEYS")
-client = openai.OpenAI(api_key=API_KEY)
+GEMINI_KEY = os.getenv("GEMINI_AI")
+client = genai.Client(api_key=GEMINI_KEY)
 TIMEOUT = 100000
 LOG_FILE_NAME = f"Log_{DATE_NOW}.txt"
 
 
-def save_data(item: DetailPage, article_url: str, base_url: str) -> None:
-    """Save item data and article URL to a Google Sheet."""
-    item_json = json.loads(item.model_dump_json())
-    item_json.update(
-        {"article_url": article_url, "date_found": datetime.now().isoformat()}
+def model_parser(
+    prompt: str, model: BaseModel, content: str
+):  # "Extract the article detail info from the text"
+    final_chunk = "".join(
+        chunk.text
+        for chunk in client.models.generate_content_stream(
+            model="gemini-2.0-flash",
+            contents=[prompt, content],
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=model,
+            ),
+        )
     )
-
-    df = pd.DataFrame(item_json, index=[0]).astype("object").replace(pd.NaT, None)
-    row_data = df.iloc[0].tolist()
-    gsheet_utils.add_row(base_url, row_data)
-
-
-def update_progress(domain_hash: str, status: str) -> None:
-    """Update the progress status in a JSON file."""
-    with open("progress.json", "r+") as f:
-        content = f.read()
-        json_data = json.loads(content) if content else {}
-        json_data.setdefault(domain_hash, {})["progress"] = status
-        f.seek(0)
-        json.dump(json_data, f)
-        f.truncate()
-
-
-def check_url_in_file(filename: str, url: str) -> bool:
-    """Check if a URL is already present in a file."""
-    os.mknod(filename) if not os.path.exists(filename) else {}
-    with open(filename, "r") as file:
-        content = file.read()
-        return url.lower() in content.lower()
-    return False
-
-
-def write_to_file(filename: str, data: str) -> None:
-    """Append data to a file, creating it if it doesn't exist."""
-    os.mknod(filename) if not os.path.exists(filename) else {}
-    with open(filename, "a") as f:
-        f.write(data)
+    json_data = json_repair.loads(final_chunk)
+    return model(**json_data)
 
 
 def load_detail_page_html(detail_page_url: str) -> HTMLParser | None:
@@ -89,7 +70,6 @@ def increment_to_page_url(url: str, num: int) -> str:
 def get_detail_page_info(
     logger,
     url: str,
-    article_selector: str,
     primary_keywords: list[str] = [],
     secondary_keywords: list[str] = [],
 ) -> DetailPage | None:
@@ -101,20 +81,13 @@ def get_detail_page_info(
         if not soup:
             return None
 
-        html_text = " ".join(html.html for html in soup.css(article_selector))
+        html_text = utils.html_to_md(soup)
         if utils.html_is_validated(html_text, primary_keywords, secondary_keywords):
-            completion = client.beta.chat.completions.parse(
-                model="gpt-4o",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "Extract the article detail info from the text",
-                    },
-                    {"role": "user", "content": html_text},
-                ],
-                response_format=DetailPage,
+            return model_parser(
+                prompt="Extract the article detail info from the text",
+                model=DetailPage,
+                content=html_text,
             )
-            return completion.choices[0].message.parsed
         return None
     except Exception as e:
         logger.error(f"Error extracting detail page info: {e}")
@@ -125,8 +98,7 @@ def get_articles_info(
     logger,
     domain_hash: str,
     base_url: str,
-    detail_page_selector: str,
-    articles: list[Node],
+    articles: Multi_ListingPage_Article,
     primary_keywords: list[str] = [],
     secondary_keywords: list[str] = [],
     oldest_date: str | None = None,
@@ -137,27 +109,26 @@ def get_articles_info(
     to_continue = True
     parsed_articles = []
 
-    for article in articles:
-        article_url = urljoin(base_url, article.css_first("a").attrs["href"])
-        if check_url_in_file(f"./Cache/{domain_hash}.txt", article_url):
+    for article in articles.data:
+        article_url = urljoin(base_url, article.url)
+        if utils.check_url_in_file(f"./Cache/{domain_hash}.txt", article_url):
             logger.info(f"Article already parsed: {article_url}")
             continue
 
         item = get_detail_page_info(
             logger,
             article_url,
-            detail_page_selector,
             primary_keywords,
             secondary_keywords,
         )
         if item:
-            write_to_file(f"./Cache/{domain_hash}.txt", f"{article_url}\n")
+            utils.write_to_file(f"./Cache/{domain_hash}.txt", f"{article_url}\n")
             if item.date and parse(item.date):
                 if (oldest_date and parse(item.date) >= parse(oldest_date)) and (
                     parse(item.date) <= parse(earliest_date)
                 ):
                     parsed_articles.append(item)
-                    save_data(item, article_url, base_url)
+                    utils.save_data(item, article_url, base_url)
                 else:
                     logger.info(f"Reached stop date {item.date}")
                     to_continue = False
@@ -173,9 +144,6 @@ def number_pagination(
     domain_hash: str,
     archive_url: str,
     base_url: str,
-    next_page_selector: str,
-    listing_page_selector: str,
-    detail_page_selector: str,
     oldest_date: str,
     earliest_date: str,
     primary_keywords: list[str],
@@ -194,7 +162,6 @@ def number_pagination(
         try:
             page.goto(current_url, timeout=TIMEOUT, wait_until="load")
             logger.info("Waiting for the news data")
-            page.wait_for_selector(listing_page_selector, timeout=TIMEOUT)
 
             actual_url = page.url
             if actual_url == previous_url:
@@ -205,9 +172,13 @@ def number_pagination(
 
             previous_url = actual_url
             soup = HTMLParser(page.content())
-            articles = soup.css(listing_page_selector)
+            articles: Multi_ListingPage_Article = model_parser(
+                prompt="Extract the articles info in the listing",
+                model=Multi_ListingPage_Article,
+                content=utils.html_to_md(soup),
+            )
 
-            if not articles:
+            if not articles.data:
                 logger.info(
                     f"No articles found on page {page_num}. Stopping pagination."
                 )
@@ -217,7 +188,6 @@ def number_pagination(
                 logger,
                 domain_hash,
                 base_url,
-                detail_page_selector,
                 articles,
                 primary_keywords,
                 secondary_keywords,
@@ -245,127 +215,6 @@ def number_pagination(
     return all_articles
 
 
-def load_more_pagination(
-    page: Page,
-    domain_hash: str,
-    archive_url: str,
-    base_url: str,
-    next_page_selector: str,
-    listing_page_selector: str,
-    detail_page_selector: str,
-    oldest_date: str,
-    earliest_date: str,
-    primary_keywords: list[str],
-    secondary_keywords: list[str],
-    logger,
-) -> list:
-    """Handle pagination by clicking 'load more' buttons."""
-    logger.info("Page loading")
-    page.goto(archive_url, timeout=TIMEOUT, wait_until="load")
-    logger.info("Waiting for the news data")
-    page.wait_for_selector(listing_page_selector, timeout=TIMEOUT)
-    all_articles = []
-    all_article_urls = []
-
-    while page.is_visible(next_page_selector):
-        page.click(next_page_selector)
-        page.wait_for_timeout(3000)
-        soup = HTMLParser(page.content())
-        articles = soup.css(listing_page_selector)
-        temp_article_urls = []
-
-        for article in articles:
-            article_url = article.css_first("a").attrs["href"]
-            if article_url not in all_article_urls:
-                temp_article_urls.append(article_url)
-
-        if not temp_article_urls:
-            break
-
-        articles_infos = get_articles_info(
-            logger,
-            domain_hash,
-            base_url,
-            detail_page_selector,
-            articles,
-            primary_keywords,
-            secondary_keywords,
-            oldest_date,
-            earliest_date,
-        )
-        all_articles.extend(articles_infos.get("articles"))
-        all_article_urls.extend(temp_article_urls)
-        logger.info(f"Found {len(all_article_urls)} articles")
-
-        if not articles_infos.get("to_continue"):
-            break
-
-    return all_articles
-
-
-def infinite_scroll_pagination(
-    page: Page,
-    domain_hash: str,
-    archive_url: str,
-    base_url: str,
-    next_page_selector: str,
-    listing_page_selector: str,
-    detail_page_selector: str,
-    oldest_date: str,
-    earliest_date: str,
-    primary_keywords: list[str],
-    secondary_keywords: list[str],
-    logger,
-) -> list:
-    """Handle pagination by infinite scrolling."""
-    logger.info("Page loading")
-    page.goto(archive_url, timeout=TIMEOUT, wait_until="load")
-    logger.info("Waiting for the news data")
-    page.wait_for_selector(listing_page_selector, timeout=TIMEOUT)
-    all_article_urls = []
-    all_articles = []
-
-    while True:
-        page.wait_for_timeout(3000)
-        page.mouse.dblclick(0, 0)
-        page.wait_for_timeout(1000)
-        soup = HTMLParser(page.content())
-        articles = soup.css(listing_page_selector)
-        temp_article_urls = []
-
-        for article in articles:
-            article_url = article.css_first("a").attrs["href"]
-            if article_url not in all_article_urls:
-                temp_article_urls.append(article_url)
-
-        if not temp_article_urls:
-            break
-
-        articles_infos = get_articles_info(
-            logger,
-            domain_hash,
-            base_url,
-            detail_page_selector,
-            articles,
-            primary_keywords,
-            secondary_keywords,
-            oldest_date,
-            earliest_date,
-        )
-        all_articles.extend(articles_infos.get("articles"))
-        all_article_urls.extend(temp_article_urls)
-        logger.info(f"Found {len(all_article_urls)} articles")
-        page.keyboard.press("End")
-
-        if not articles_infos.get("to_continue"):
-            logger.info(
-                "Found article older than the cut-off date. Stopping pagination."
-            )
-            break
-
-    return all_articles
-
-
 def start_browser(params: dict, domain_hash: str) -> None:
     """Initialize the browser and start the scraping process."""
     try:
@@ -376,26 +225,15 @@ def start_browser(params: dict, domain_hash: str) -> None:
         with sync_playwright() as p:
             browser = p.firefox.launch()
             page = browser.new_page()
-
-            pagination_type = params.pop("pagination_type", None)
-            if pagination_type == "numbered":
-                outputs = number_pagination(
-                    page=page, domain_hash=domain_hash, logger=logger, **params
-                )
-            elif pagination_type == "load_more":
-                outputs = load_more_pagination(
-                    page=page, domain_hash=domain_hash, logger=logger, **params
-                )
-            elif pagination_type == "infinite_scroll":
-                outputs = infinite_scroll_pagination(
-                    page=page, domain_hash=domain_hash, logger=logger, **params
-                )
+            outputs = number_pagination(
+                page=page, domain_hash=domain_hash, logger=logger, **params
+            )
 
             logger.info(f"Total saved: {len(outputs)}")
-            update_progress(domain_hash, "success")
+            utils.update_progress(domain_hash, "success")
             logger.success("Success")
     except Exception as e:
-        update_progress(domain_hash, "failed")
+        utils.update_progress(domain_hash, "failed")
         logger.exception(e)
         logger.error("Failed")
     finally:
@@ -404,15 +242,11 @@ def start_browser(params: dict, domain_hash: str) -> None:
 
 if __name__ == "__main__":
     params = {
-        "archive_url": "https://navarrepress.com/archive/crime/page/1/",
-        "base_url": "https://navarrepress.com/",
-        "next_page_selector": "",
-        "listing_page_selector": 'div[class="uk-grid tm-grid-expand uk-grid-row-small uk-margin-large"]',
-        "detail_page_selector": 'div[class="uk-container uk-container-xlarge"]',
+        "archive_url": "https://www.fox35orlando.com/tag/crime-publicsafety?page=1",
+        "base_url": "https://www.fox35orlando.com/",
         "oldest_date": "November 01, 2024",
         "earliest_date": "",
         "primary_keywords": "",
         "secondary_keywords": [],
-        "pagination_type": "numbered",
     }
     start_browser(params, "dfbcb7ae3c1dfe10e4db")
