@@ -232,7 +232,7 @@ def start_browser(params: dict, domain_hash: str) -> None:
             logger.info(f"Total saved: {len(outputs)}")
             utils.update_progress(domain_hash, "success")
             logger.success("Success")
-    except Exception as e:
+    except BaseException as e:
         utils.update_progress(domain_hash, "failed")
         logger.exception(e)
         logger.error("Failed")

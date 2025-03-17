@@ -1,10 +1,12 @@
 from nicegui import ui
 import os
+import signal
 import json
 from bot import start_browser
 import multiprocessing
 from urllib.parse import urlparse
 import hashlib
+from utilities.utils import update_progress
 
 LOG_FILE = "progress.json"
 
@@ -21,6 +23,19 @@ class App:
         self.earliest_date = ""
         self.primary_keywords = ""
         self.secondary_keywords = ""
+        self.bot_id = ""
+
+    def kill_bot(self):
+        update_progress(self.domain_hash, "failed")
+        try:
+            os.kill(int(self.bot_id), signal.SIGKILL)
+            ui.notification(
+                message="Bot killed", position="top", type="positive", close_button=True
+            )
+        except ProcessLookupError as e:
+            self.show_validation_notif(f"Process Killed - {e}")
+        except Exception as e:
+            self.show_validation_notif(f"Bot Killed Error - {e}")
 
     def get_domain_hash(self):
         domain = urlparse(self.base_url).netloc
@@ -63,6 +78,7 @@ class App:
                     target=start_browser, args=(self.params, self.domain_hash)
                 )
                 p.start()
+                update_progress(self.domain_hash, p.pid, "pid")
             else:
                 ui.notification(
                     "Archive is currently running", type="info", position="top"
@@ -197,10 +213,12 @@ class App:
             self.get_input(
                 "Show logs of", "base_url", placeholder="https://alachuachronicle.com/"
             ).on_value_change(lambda x: self.update_domain_hash())
+            self.get_input("Archive Bot ID", "bot_id")
             self.log_ui()
             ui.button(
                 "Refresh Log", on_click=lambda: ui.timer(2, lambda: self.refresh_log())
             )
+            ui.button("Stop", on_click=lambda: self.kill_bot())
 
 
 @ui.page("/")
@@ -209,4 +227,4 @@ def main():
     the_app.main_page_ui()
 
 
-ui.run(reload=True, port=80)
+ui.run(reload=True, port=8080)

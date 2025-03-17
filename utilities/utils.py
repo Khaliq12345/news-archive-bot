@@ -66,12 +66,12 @@ def save_data(item: DetailPage, article_url: str, base_url: str) -> None:
     gsheet_utils.add_row(base_url, row_data)
 
 
-def update_progress(domain_hash: str, status: str) -> None:
+def update_progress(domain_hash: str, status: str, key: str = "progress") -> None:
     """Update the progress status in a JSON file."""
     with open("progress.json", "r+") as f:
         content = f.read()
         json_data = json.loads(content) if content else {}
-        json_data.setdefault(domain_hash, {})["progress"] = status
+        json_data.setdefault(domain_hash, {})[key] = status
         f.seek(0)
         json.dump(json_data, f)
         f.truncate()
