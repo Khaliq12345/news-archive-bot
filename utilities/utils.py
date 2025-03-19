@@ -6,6 +6,7 @@ from datetime import datetime
 import pandas as pd
 from utilities import gsheet_utils
 import os
+from urllib.parse import urlparse
 
 
 def html_is_validated(
@@ -63,7 +64,7 @@ def save_data(item: DetailPage, article_url: str, base_url: str) -> None:
 
     df = pd.DataFrame(item_json, index=[0]).astype("object").replace(pd.NaT, None)
     row_data = df.iloc[0].tolist()
-    gsheet_utils.add_row(base_url, row_data)
+    gsheet_utils.add_row(urlparse(base_url).netloc, row_data)
 
 
 def update_progress(domain_hash: str, status: str, key: str = "progress") -> None:
