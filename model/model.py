@@ -37,27 +37,27 @@ class DetailPage(BaseModel):
         alias="Suspect Name",
         description="Extract the name of the suspect, return None if not found",
     )
-    age: int | None = Field(
-        alias="Age",
-        description="Extract the age of the suspect, return None if not found",
-    )
-    officer_involved: str | None = Field(
-        alias="Officer Involved",
-        description="Extract the name of the officer involved, return None if not found",
-    )
-    location: str | None = Field(
-        alias="Location",
-        description="Extract the location of the incident, return None if not found",
-    )
-    department: str | None = Field(
-        alias="Department",
-        description="Extract the department of the incident, return None if not found",
-    )
-    state: str | None = Field(
-        alias="State",
-        description="Extract the state of the incident, return None if not found",
-    )
-    year: int = Field(alias="Year", description="Extract the year of the article")
+    # age: int | None = Field(
+    #     alias="Age",
+    #     description="Extract the age of the suspect, return None if not found",
+    # )
+    # officer_involved: str | None = Field(
+    #     alias="Officer Involved",
+    #     description="Extract the name of the officer involved, return None if not found",
+    # )
+    # location: str | None = Field(
+    #     alias="Location",
+    #     description="Extract the location of the incident, return None if not found",
+    # )
+    # department: str | None = Field(
+    #     alias="Department",
+    #     description="Extract the department of the incident, return None if not found",
+    # )
+    # state: str | None = Field(
+    #     alias="State",
+    #     description="Extract the state of the incident, return None if not found",
+    # )
+    # year: int = Field(alias="Year", description="Extract the year of the article")
     charge: str | None = Field(
         alias="Charge", description="Extract the charge of the suspect in the article"
     )

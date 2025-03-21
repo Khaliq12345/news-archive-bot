@@ -23,6 +23,7 @@ class App:
         self.earliest_date = ""
         self.primary_keywords = ""
         self.secondary_keywords = ""
+        self.selector = None
         self.bot_id = ""
 
     def kill_bot(self):
@@ -75,7 +76,8 @@ class App:
         if is_validated:
             if self.add_url_to_logger():
                 p = multiprocessing.Process(
-                    target=start_browser, args=(self.params, self.domain_hash)
+                    target=start_browser,
+                    args=(self.params, self.domain_hash, self.selector),
                 )
                 p.start()
                 update_progress(self.domain_hash, p.pid, "pid")
@@ -180,6 +182,7 @@ class App:
                 validation = {"Valid url is required": lambda value: "http" in value}
                 self.get_input("Archive Url", "archive_url", validation=validation)
                 self.get_input("Base Url", "base_url")
+                self.get_input("Next Page/Button Selector", "selector")
                 self.get_input(
                     "Primary Keywords", "primary_keywords", placeholder="Arrest;Bodycam"
                 ).props("""hint='seperate multiple by ";"' autogrow""")
@@ -227,4 +230,4 @@ def main():
     the_app.main_page_ui()
 
 
-ui.run(reload=True, port=80)
+ui.run(reload=True, port=8880)

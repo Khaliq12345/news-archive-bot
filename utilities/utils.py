@@ -55,11 +55,18 @@ def html_to_md(soup: HTMLParser):
     return h.handle(soup.html)
 
 
-def save_data(item: DetailPage, article_url: str, base_url: str) -> None:
+def save_data(
+    item: DetailPage, article_url: str, base_url: str, secondary_kw: list[str]
+) -> None:
     """Save item data and article URL to a Google Sheet."""
+    secondary_kw_str = ";".join(secondary_kw)
     item_json = json.loads(item.model_dump_json())
     item_json.update(
-        {"article_url": article_url, "date_found": datetime.now().isoformat()}
+        {
+            "article_url": article_url,
+            "date_found": datetime.now().isoformat(),
+            "secondary_keywords": secondary_kw_str,
+        }
     )
 
     df = pd.DataFrame(item_json, index=[0]).astype("object").replace(pd.NaT, None)

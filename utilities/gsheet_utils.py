@@ -9,6 +9,7 @@ load_dotenv()
 COLUMNS = [DetailPage.model_fields[x].alias for x in DetailPage.model_fields]
 COLUMNS.append("Article Url")
 COLUMNS.append("Date Founded")
+COLUMNS.append("Secondary Keywords")
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive",

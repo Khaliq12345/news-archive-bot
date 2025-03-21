@@ -3,6 +3,7 @@ import re
 import concurrent.futures
 from datetime import datetime
 from urllib.parse import urljoin
+import hashlib
 
 from playwright.sync_api import sync_playwright, Page
 from selectolax.parser import HTMLParser
@@ -109,7 +110,7 @@ def get_articles_info(
     to_continue = True
     parsed_articles = []
 
-    for article in articles.data:
+    for article in articles.data[:1]:
         article_url = urljoin(base_url, article.url)
         if utils.check_url_in_file(f"./Cache/{domain_hash}.txt", article_url):
             logger.info(f"Article already parsed: {article_url}")
@@ -123,18 +124,19 @@ def get_articles_info(
         )
         if item:
             utils.write_to_file(f"./Cache/{domain_hash}.txt", f"{article_url}\n")
-            if item.date and parse(item.date):
-                if (oldest_date and parse(item.date) >= parse(oldest_date)) and (
+            if (item.date) and parse(item.date) and (oldest_date):
+                if (parse(item.date) >= parse(oldest_date)) and (
                     parse(item.date) <= parse(earliest_date)
                 ):
                     parsed_articles.append(item)
-                    utils.save_data(item, article_url, base_url)
+                    utils.save_data(item, article_url, base_url, secondary_keywords)
                 else:
                     logger.info(f"Reached stop date {item.date}")
                     to_continue = False
                     break
             else:
                 break
+        break
 
     return {"articles": parsed_articles, "to_continue": to_continue}
 
@@ -215,20 +217,111 @@ def number_pagination(
     return all_articles
 
 
-def start_browser(params: dict, domain_hash: str) -> None:
+def click_pagination(
+    page: Page,
+    domain_hash: str,
+    archive_url: str,
+    base_url: str,
+    oldest_date: str,
+    earliest_date: str,
+    primary_keywords: list[str],
+    secondary_keywords: list[str],
+    selector: str | None,
+    logger,
+) -> list:
+    """Handle pagination by page numbers."""
+    logger.info("Starting pagination process")
+    all_articles = []
+    page_num = 0
+    print(f"Page - {page_num}")
+    try:
+        page.goto(archive_url, timeout=TIMEOUT, wait_until="load")
+        logger.info("Waiting for the news data")
+        seen_chunks = set()
+        while True:
+            page_num += 1
+            print(f"Page - {page_num}")
+            original_md = utils.html_to_md(HTMLParser(page.content()))
+            chunks = original_md.splitlines()
+            new_content = []
+            for chunk in chunks:
+                chunk_hash = hashlib.md5(chunk.encode()).hexdigest()
+                if chunk_hash not in seen_chunks:
+                    seen_chunks.add(chunk_hash)
+                    new_content.append(chunk)
+
+            new_md = "\n".join(new_content)
+            articles: Multi_ListingPage_Article = model_parser(
+                prompt="Extract the articles info in the listing",
+                model=Multi_ListingPage_Article,
+                content=new_md,
+            )
+
+            if not articles.data:
+                logger.info(
+                    f"No articles found on page {page_num}. Stopping pagination."
+                )
+                break
+
+            articles_infos = get_articles_info(
+                logger,
+                domain_hash,
+                base_url,
+                articles,
+                primary_keywords,
+                secondary_keywords,
+                oldest_date,
+                earliest_date,
+            )
+
+            all_articles.extend(articles_infos.get("articles"))
+            logger.info(f"All articles: {len(all_articles)}")
+
+            if not articles_infos.get("to_continue"):
+                logger.info(
+                    "Found article older than the cut-off date. Stopping pagination."
+                )
+                break
+
+            page.reload(timeout=TIMEOUT)
+            if selector:
+                page.wait_for_selector(selector, timeout=10000)
+                page.click(selector)
+            else:
+                page.keyboard.press("End")
+            page.wait_for_timeout(5000)
+    except Exception as e:
+        logger.exception(f"Error on page {page_num}: {e}")
+
+    return all_articles
+
+
+def start_browser(
+    params: dict,
+    domain_hash: str,
+    selector: str | None = None,
+) -> None:
     """Initialize the browser and start the scraping process."""
     try:
         logger.info(f"Started the background task: {params}")
         log_file = f"./Logs/{domain_hash}.log"
         logger.add(log_file, mode="w")
-
+        outputs = []
         with sync_playwright() as p:
-            browser = p.firefox.launch()
+            browser = p.firefox.launch(headless=False)
             page = browser.new_page()
-            outputs = number_pagination(
-                page=page, domain_hash=domain_hash, logger=logger, **params
+            # if is_paginated:
+            #     outputs = number_pagination(
+            #         page=page, domain_hash=domain_hash, logger=logger, **params
+            #     )
+            # else:
+            outputs = click_pagination(
+                page=page,
+                domain_hash=domain_hash,
+                logger=logger,
+                selector=selector,
+                **params,
             )
-
             logger.info(f"Total saved: {len(outputs)}")
             utils.update_progress(domain_hash, "success")
             logger.success("Success")
@@ -242,11 +335,15 @@ def start_browser(params: dict, domain_hash: str) -> None:
 
 if __name__ == "__main__":
     params = {
-        "archive_url": "https://www.fox35orlando.com/tag/crime-publicsafety?page=1",
-        "base_url": "https://www.fox35orlando.com/",
+        "archive_url": "https://www.channel3000.com/news/crime/",
+        "base_url": "https://www.channel3000.com/",
         "oldest_date": "November 01, 2024",
         "earliest_date": "",
         "primary_keywords": "",
         "secondary_keywords": [],
     }
-    start_browser(params, "dfbcb7ae3c1dfe10e4db")
+    start_browser(
+        params,
+        "dfbcb7ae3c1dfe10e4db",
+        selector="#trigger-next-1442956 > span:nth-child(1)",
+    )
