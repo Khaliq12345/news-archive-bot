@@ -71,8 +71,7 @@ def increment_to_page_url(url: str, num: int) -> str:
 def get_detail_page_info(
     logger,
     url: str,
-    primary_keywords: list[str] = [],
-    secondary_keywords: list[str] = [],
+    secondary_keywords: list[str] = []
 ) -> DetailPage | None:
     """Extract detailed information from a detail page."""
     try:
@@ -83,12 +82,11 @@ def get_detail_page_info(
             return None
 
         html_text = utils.html_to_md(soup)
-        if utils.html_is_validated(html_text, primary_keywords, secondary_keywords):
-            return model_parser(
-                prompt="Extract the article detail info from the text",
-                model=DetailPage,
-                content=html_text,
-            )
+        return model_parser(
+            prompt=f"Extract the article detail info from the text, secondary_keywords ({secondary_keywords}) the secondary_keywords field should contain only the keywords that are in provided keywords and can also be found on the page content or title",
+            model=DetailPage,
+            content=html_text,
+        )
         return None
     except Exception as e:
         logger.error(f"Error extracting detail page info: {e}")
@@ -110,18 +108,18 @@ def get_articles_info(
     to_continue = True
     parsed_articles = []
 
-    for article in articles.data[:1]:
+    for article in articles.data:
         article_url = urljoin(base_url, article.url)
         if utils.check_url_in_file(f"./Cache/{domain_hash}.txt", article_url):
             logger.info(f"Article already parsed: {article_url}")
             continue
 
-        item = get_detail_page_info(
+        item: DetailPage = get_detail_page_info(
             logger,
             article_url,
-            primary_keywords,
             secondary_keywords,
         )
+        pks, sks = utils.html_is_validated(item.title, primary_keywords, secondary_keywords)
         if item:
             utils.write_to_file(f"./Cache/{domain_hash}.txt", f"{article_url}\n")
             if (item.date) and parse(item.date) and (oldest_date):
@@ -129,14 +127,14 @@ def get_articles_info(
                     parse(item.date) <= parse(earliest_date)
                 ):
                     parsed_articles.append(item)
-                    utils.save_data(item, article_url, base_url, secondary_keywords)
+                    if (pks) or (sks):
+                        utils.save_data(item, article_url, base_url, pks, sks)
                 else:
                     logger.info(f"Reached stop date {item.date}")
                     to_continue = False
                     break
             else:
                 break
-        break
 
     return {"articles": parsed_articles, "to_continue": to_continue}
 
@@ -308,7 +306,7 @@ def start_browser(
         logger.add(log_file, mode="w")
         outputs = []
         with sync_playwright() as p:
-            browser = p.firefox.launch(headless=False)
+            browser = p.firefox.launch()
             page = browser.new_page()
             # if is_paginated:
             #     outputs = number_pagination(
@@ -335,15 +333,15 @@ def start_browser(
 
 if __name__ == "__main__":
     params = {
-        "archive_url": "https://www.channel3000.com/news/crime/",
-        "base_url": "https://www.channel3000.com/",
+        "archive_url": "https://kutv.com/topic/Arrest",
+        "base_url": "https://kutv.com",
         "oldest_date": "November 01, 2024",
         "earliest_date": "",
         "primary_keywords": "",
-        "secondary_keywords": [],
+        "secondary_keywords": ["shooting"],
     }
     start_browser(
         params,
         "dfbcb7ae3c1dfe10e4db",
-        selector="#trigger-next-1442956 > span:nth-child(1)",
+        selector="",
     )

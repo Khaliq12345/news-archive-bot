@@ -11,27 +11,18 @@ from urllib.parse import urlparse
 
 def html_is_validated(
     html: str, primary_keywords: list[str], secondary_keywords: list[str]
-) -> bool:
-    primary_passed = False
-    try:
-        if primary_keywords:
-            for keyword in primary_keywords:
-                if keyword.lower() in html.lower():
-                    primary_passed = True
-                    break
-        else:
-            return True
-        if secondary_keywords:
-            for keyword in secondary_keywords:
-                if keyword.lower() in html.lower():
-                    return True
-        else:
-            if primary_passed:
-                return True
-        return False
-    except Exception as e:
-        print(f"Error: {e} | HTML Not Validated")
-        return False
+) -> tuple:
+    html = str(html)
+    ps = []
+    ss = []
+    for pk in primary_keywords:
+        if pk.lower() in html.lower():
+            ps.append(pk)
+    for sk in secondary_keywords:
+        if sk.lower() in html.lower():
+            ss.append(sk)
+        
+    return ps, ss
 
 
 def html_to_md(soup: HTMLParser):
@@ -56,20 +47,23 @@ def html_to_md(soup: HTMLParser):
 
 
 def save_data(
-    item: DetailPage, article_url: str, base_url: str, secondary_kw: list[str]
+    item: DetailPage, article_url: str, base_url: str, primary_keywords: list[str], secondary_keywords: list[str] 
 ) -> None:
     """Save item data and article URL to a Google Sheet."""
-    secondary_kw_str = ";".join(secondary_kw)
+    secondary_keywords = ";".join(secondary_keywords)
+    primary_keywords = ";".join(primary_keywords)
     item_json = json.loads(item.model_dump_json())
     item_json.update(
         {
             "article_url": article_url,
             "date_found": datetime.now().isoformat(),
-            "secondary_keywords": secondary_kw_str,
+            "primary_keywords": primary_keywords,
+            "secondary_keywords": secondary_keywords
         }
     )
-
     df = pd.DataFrame(item_json, index=[0]).astype("object").replace(pd.NaT, None)
+    df.drop("content", axis=1, inplace=True)
+    df.to_csv('test.csv', index=False)
     row_data = df.iloc[0].tolist()
     gsheet_utils.add_row(urlparse(base_url).netloc, row_data)
 

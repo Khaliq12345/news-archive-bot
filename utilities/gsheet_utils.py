@@ -7,8 +7,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 COLUMNS = [DetailPage.model_fields[x].alias for x in DetailPage.model_fields]
+COLUMNS.remove('Content')
 COLUMNS.append("Article Url")
 COLUMNS.append("Date Founded")
+COLUMNS.append("Primary Keywords")
 COLUMNS.append("Secondary Keywords")
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",

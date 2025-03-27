@@ -230,4 +230,4 @@ def main():
     the_app.main_page_ui()
 
 
-ui.run(reload=True, port=8880)
+ui.run(reload=True, port=80)
