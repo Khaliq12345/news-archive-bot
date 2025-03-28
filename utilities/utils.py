@@ -3,10 +3,9 @@ import html2text
 from model.model import DetailPage
 import json
 from datetime import datetime
-import pandas as pd
-from utilities import gsheet_utils
 import os
 from urllib.parse import urlparse
+from utilities.table import add_data
 
 
 def html_is_validated(
@@ -21,7 +20,7 @@ def html_is_validated(
     for sk in secondary_keywords:
         if sk.lower() in html.lower():
             ss.append(sk)
-        
+
     return ps, ss
 
 
@@ -47,25 +46,28 @@ def html_to_md(soup: HTMLParser):
 
 
 def save_data(
-    item: DetailPage, article_url: str, base_url: str, primary_keywords: list[str], secondary_keywords: list[str] 
+    item: DetailPage,
+    article_url: str,
+    base_url: str,
+    primary_keywords: list[str],
+    secondary_keywords: list[str],
 ) -> None:
     """Save item data and article URL to a Google Sheet."""
     secondary_keywords = ";".join(secondary_keywords)
     primary_keywords = ";".join(primary_keywords)
-    item_json = json.loads(item.model_dump_json())
-    item_json.update(
-        {
-            "article_url": article_url,
-            "date_found": datetime.now().isoformat(),
-            "primary_keywords": primary_keywords,
-            "secondary_keywords": secondary_keywords
-        }
+    add_data(
+        table_name=urlparse(base_url).netloc,
+        data={
+            "Date Scraped": datetime.now().isoformat(),
+            "Date Of Article": item.date,
+            "News Article": item.title,
+            "Link": article_url,
+            "Suspect Name": item.suspect_name,
+            "Charges": item.charge,
+            "Primary Keywords": primary_keywords,
+            "Secondary Keywords": secondary_keywords,
+        },
     )
-    df = pd.DataFrame(item_json, index=[0]).astype("object").replace(pd.NaT, None)
-    df.drop("content", axis=1, inplace=True)
-    df.to_csv('test.csv', index=False)
-    row_data = df.iloc[0].tolist()
-    gsheet_utils.add_row(urlparse(base_url).netloc, row_data)
 
 
 def update_progress(domain_hash: str, status: str, key: str = "progress") -> None:

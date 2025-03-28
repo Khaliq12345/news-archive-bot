@@ -71,7 +71,6 @@ def increment_to_page_url(url: str, num: int) -> str:
 def get_detail_page_info(
     logger,
     url: str,
-    secondary_keywords: list[str] = []
 ) -> DetailPage | None:
     """Extract detailed information from a detail page."""
     try:
@@ -83,11 +82,10 @@ def get_detail_page_info(
 
         html_text = utils.html_to_md(soup)
         return model_parser(
-            prompt=f"Extract the article detail info from the text, secondary_keywords ({secondary_keywords}) the secondary_keywords field should contain only the keywords that are in provided keywords and can also be found on the page content or title",
+            prompt="Extract the article detail info from the text.",
             model=DetailPage,
             content=html_text,
         )
-        return None
     except Exception as e:
         logger.error(f"Error extracting detail page info: {e}")
         return None
@@ -117,9 +115,10 @@ def get_articles_info(
         item: DetailPage = get_detail_page_info(
             logger,
             article_url,
-            secondary_keywords,
         )
-        pks, sks = utils.html_is_validated(item.title, primary_keywords, secondary_keywords)
+        pks, sks = utils.html_is_validated(
+            item.title, primary_keywords, secondary_keywords
+        )
         if item:
             utils.write_to_file(f"./Cache/{domain_hash}.txt", f"{article_url}\n")
             if (item.date) and parse(item.date) and (oldest_date):
@@ -337,8 +336,8 @@ if __name__ == "__main__":
         "base_url": "https://kutv.com",
         "oldest_date": "November 01, 2024",
         "earliest_date": "",
-        "primary_keywords": "",
-        "secondary_keywords": ["shooting"],
+        "primary_keywords": ["arrest", "shooting"],
+        "secondary_keywords": ["arrest"],
     }
     start_browser(
         params,

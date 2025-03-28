@@ -40,6 +40,3 @@ class DetailPage(BaseModel):
     charge: str | None = Field(
         alias="Charge", description="Extract the charge of the suspect in the article"
     )
-    secondary_keywords: list[str] | None = Field(
-        alias="Secondary Keywords", description="Extract all the secondary keywords based on the the provided secondary keywords in the prompt"
-    )
