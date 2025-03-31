@@ -107,33 +107,36 @@ def get_articles_info(
     parsed_articles = []
 
     for article in articles.data:
-        article_url = urljoin(base_url, article.url)
-        if utils.check_url_in_file(f"./Cache/{domain_hash}.txt", article_url):
-            logger.info(f"Article already parsed: {article_url}")
-            continue
+        try:
+            article_url = urljoin(base_url, article.url)
+            if utils.check_url_in_file(f"./Cache/{domain_hash}.txt", article_url):
+                logger.info(f"Article already parsed: {article_url}")
+                continue
 
-        item: DetailPage = get_detail_page_info(
-            logger,
-            article_url,
-        )
-        pks, sks = utils.html_is_validated(
-            item.title, primary_keywords, secondary_keywords
-        )
-        if item:
-            utils.write_to_file(f"./Cache/{domain_hash}.txt", f"{article_url}\n")
-            if (item.date) and parse(item.date) and (oldest_date):
-                if (parse(item.date) >= parse(oldest_date)) and (
-                    parse(item.date) <= parse(earliest_date)
-                ):
-                    parsed_articles.append(item)
-                    if (pks) or (sks):
-                        utils.save_data(item, article_url, base_url, pks, sks)
+            item: DetailPage = get_detail_page_info(
+                logger,
+                article_url,
+            )
+            pks, sks = utils.html_is_validated(
+                item.title, primary_keywords, secondary_keywords
+            )
+            if item:
+                utils.write_to_file(f"./Cache/{domain_hash}.txt", f"{article_url}\n")
+                if (item.date) and parse(item.date) and (oldest_date):
+                    if (parse(item.date) >= parse(oldest_date)) and (
+                        parse(item.date) <= parse(earliest_date)
+                    ):
+                        parsed_articles.append(item)
+                        if (pks) or (sks):
+                            utils.save_data(item, article_url, base_url, pks, sks)
+                    else:
+                        logger.info(f"Reached stop date {item.date}")
+                        to_continue = False
+                        break
                 else:
-                    logger.info(f"Reached stop date {item.date}")
-                    to_continue = False
                     break
-            else:
-                break
+        except Exception as e:
+            logger.error(f"Error - {e}")
 
     return {"articles": parsed_articles, "to_continue": to_continue}
 
