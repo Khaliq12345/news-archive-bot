@@ -18,12 +18,17 @@ def auth_user() -> str:
 
 def create_table(table_name: str) -> str:
     # Prepare the request payload
+    HEADERS = {
+        "Authorization": f"JWT {auth_user()}",
+        "Content-Type": "application/json",
+    }
     payload = {
         "name": table_name,
     }
     endpoint = f"{BASE_URL}/api/database/tables/database/197/"
     response = requests.get(endpoint, headers=HEADERS)
     for x in response.json():
+        print(x, response.json(), payload)
         if x["name"] == payload["name"]:
             return x["id"]
 
@@ -41,6 +46,10 @@ def create_table(table_name: str) -> str:
 
 def update_fields(table_id: int):
     print(f"Table id - {table_id}")
+    HEADERS = {
+        "Authorization": f"JWT {auth_user()}",
+        "Content-Type": "application/json",
+    }
     # Prepare the request payload
     fields = [
         {"name": "Date Scraped", "type": "text"},
@@ -75,12 +84,6 @@ def update_fields(table_id: int):
                 f"{BASE_URL}/api/database/fields/{field['id']}/", headers=HEADERS
             )
     return table_id
-
-
-HEADERS = {
-    "Authorization": f"JWT {auth_user()}",
-    "Content-Type": "application/json",
-}
 
 
 # Headers for authentication and content type

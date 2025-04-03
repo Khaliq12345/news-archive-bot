@@ -17,6 +17,7 @@ import json_repair
 
 from utilities import utils
 from model.model import DetailPage, Multi_ListingPage_Article
+import traceback
 
 load_dotenv()
 
@@ -117,10 +118,10 @@ def get_articles_info(
                 logger,
                 article_url,
             )
-            pks, sks = utils.html_is_validated(
-                item.title, primary_keywords, secondary_keywords
-            )
             if item:
+                pks, sks = utils.html_is_validated(
+                    item.title, primary_keywords, secondary_keywords
+                )
                 utils.write_to_file(f"./Cache/{domain_hash}.txt", f"{article_url}\n")
                 if (item.date) and parse(item.date) and (oldest_date):
                     if (parse(item.date) >= parse(oldest_date)) and (
@@ -136,7 +137,9 @@ def get_articles_info(
                 else:
                     break
         except Exception as e:
-            logger.error(f"Error - {e}")
+            logger.error(
+                f"Error occurred: {e}\nFull traceback:\n{traceback.format_exc()}"
+            )
 
     return {"articles": parsed_articles, "to_continue": to_continue}
 
@@ -335,8 +338,8 @@ def start_browser(
 
 if __name__ == "__main__":
     params = {
-        "archive_url": "https://kutv.com/topic/Arrest",
-        "base_url": "https://kutv.com",
+        "archive_url": "https://www.fox13news.com/search?q=arrest&sort=date&page=1",
+        "base_url": "https://www.fox13news.com/",
         "oldest_date": "November 01, 2024",
         "earliest_date": "",
         "primary_keywords": ["arrest", "shooting"],
@@ -345,5 +348,5 @@ if __name__ == "__main__":
     start_browser(
         params,
         "dfbcb7ae3c1dfe10e4db",
-        selector="",
+        selector="#wrapper > div > div.page-content > main > div.item.item-pagination > ul > li.pagi-item.pagi-next > a",
     )
