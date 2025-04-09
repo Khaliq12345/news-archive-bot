@@ -18,6 +18,7 @@ import json_repair
 from utilities import utils
 from model.model import DetailPage, Multi_ListingPage_Article
 import traceback
+from the_retry import retry
 
 load_dotenv()
 
@@ -29,6 +30,7 @@ TIMEOUT = 100000
 LOG_FILE_NAME = f"Log_{DATE_NOW}.txt"
 
 
+@retry(attempts=2, backoff=60, exponential_backoff=True)
 def model_parser(
     prompt: str, model: BaseModel, content: str
 ):  # "Extract the article detail info from the text"

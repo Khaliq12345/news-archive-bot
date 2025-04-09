@@ -137,7 +137,7 @@ class App:
                     if self.domain_hash:
                         with open(log_file, "r") as f:
                             log_content = f.readlines()
-                            log_content.reverse()
+                            # log_content.reverse()
                             log_content = "\n".join(log_content)
                     else:
                         log_content = ""
@@ -218,9 +218,7 @@ class App:
             ).on_value_change(lambda x: self.update_domain_hash())
             self.get_input("Archive Bot ID", "bot_id")
             self.log_ui()
-            ui.button(
-                "Refresh Log", on_click=lambda: ui.timer(2, lambda: self.refresh_log())
-            )
+            ui.button("Refresh Log", on_click=lambda: self.refresh_log())
             ui.button("Stop", on_click=lambda: self.kill_bot())
 
 
