@@ -6,6 +6,7 @@ from urllib.parse import urljoin
 import hashlib
 
 from playwright.sync_api import sync_playwright, Page
+from camoufox.sync_api import Camoufox
 from selectolax.parser import HTMLParser
 from dotenv import load_dotenv
 from loguru import logger
@@ -114,6 +115,11 @@ def get_articles_info(
             article_url = urljoin(base_url, article.url)
             if utils.check_url_in_file(f"./Cache/{domain_hash}.txt", article_url):
                 logger.info(f"Article already parsed: {article_url}")
+                continue
+
+            if (base_url not in article_url) or (
+                article_url.replace("/", "") == base_url.replace("/", "")
+            ):
                 continue
 
             item: DetailPage = get_detail_page_info(
@@ -241,11 +247,19 @@ def click_pagination(
     print(f"Page - {page_num}")
     try:
         page.goto(archive_url, timeout=TIMEOUT, wait_until="load")
-        logger.info("Waiting for the news data")
         seen_chunks = set()
         while True:
             page_num += 1
             print(f"Page - {page_num}")
+
+            # Accept cookies
+            if page.get_by_role("button", name="Accept").is_visible():
+                page.get_by_role("button", name="Accept").click()
+                logger.info("Cookie consent accepted")
+            page.screenshot(path="screenshot.png")
+
+            # Start processing
+            logger.info("Waiting for the news data")
             original_md = utils.html_to_md(HTMLParser(page.content()))
             chunks = original_md.splitlines()
             new_content = []
@@ -261,6 +275,8 @@ def click_pagination(
                 model=Multi_ListingPage_Article,
                 content=new_md,
             )
+            print(f"Articles - {len(articles.data)}")
+            print(f"Page url - {page.url}")
 
             if not articles.data:
                 logger.info(
@@ -268,33 +284,36 @@ def click_pagination(
                 )
                 break
 
-            articles_infos = get_articles_info(
-                logger,
-                domain_hash,
-                base_url,
-                articles,
-                primary_keywords,
-                secondary_keywords,
-                oldest_date,
-                earliest_date,
-            )
+            # articles_infos = get_articles_info(
+            #     logger,
+            #     domain_hash,
+            #     base_url,
+            #     articles,
+            #     primary_keywords,
+            #     secondary_keywords,
+            #     oldest_date,
+            #     earliest_date,
+            # )
 
-            all_articles.extend(articles_infos.get("articles"))
-            logger.info(f"All articles: {len(all_articles)}")
+            # all_articles.extend(articles_infos.get("articles"))
+            # logger.info(f"All articles: {len(all_articles)}")
 
-            if not articles_infos.get("to_continue"):
-                logger.info(
-                    "Found article older than the cut-off date. Stopping pagination."
-                )
-                break
+            # if not articles_infos.get("to_continue"):
+            #     logger.info(
+            #         "Found article older than the cut-off date. Stopping pagination."
+            #     )
+            #     break
 
-            page.reload(timeout=TIMEOUT)
+            # page.reload(timeout=TIMEOUT)
             if selector:
-                page.wait_for_selector(selector, timeout=10000)
+                page.wait_for_selector(selector, timeout=50000)
+                page.query_selector(selector).screenshot(path="selector.png")
                 page.click(selector)
             else:
                 page.keyboard.press("End")
-            page.wait_for_timeout(5000)
+
+            logger.info(f"Waiting for page {page_num} to load")
+            page.wait_for_timeout(10000)
     except Exception as e:
         logger.exception(f"Error on page {page_num}: {e}")
 
@@ -312,14 +331,17 @@ def start_browser(
         log_file = f"./Logs/{domain_hash}.log"
         logger.add(log_file, mode="w")
         outputs = []
-        with sync_playwright() as p:
-            browser = p.firefox.launch()
+        # with sync_playwright() as p:
+        #     browser = p.firefox.launch()
+        #     page = browser.new_page()
+        # if is_paginated:
+        #     outputs = number_pagination(
+        #         page=page, domain_hash=domain_hash, logger=logger, **params
+        #     )
+        # else:
+        custom_fonts = ["Arial", "Helvetica", "Times New Roman"]
+        with Camoufox(os="linux", fonts=custom_fonts, headless="virtual") as browser:
             page = browser.new_page()
-            # if is_paginated:
-            #     outputs = number_pagination(
-            #         page=page, domain_hash=domain_hash, logger=logger, **params
-            #     )
-            # else:
             outputs = click_pagination(
                 page=page,
                 domain_hash=domain_hash,
@@ -334,14 +356,12 @@ def start_browser(
         utils.update_progress(domain_hash, "failed")
         logger.exception(e)
         logger.error("Failed")
-    finally:
-        browser.close()
 
 
 if __name__ == "__main__":
     params = {
-        "archive_url": "https://www.fox13news.com/search?q=arrest&sort=date&page=1",
-        "base_url": "https://www.fox13news.com/",
+        "archive_url": "https://www.wfla.com/?submit=&s=arrest",
+        "base_url": "https://www.wfla.com/",
         "oldest_date": "November 01, 2024",
         "earliest_date": "",
         "primary_keywords": ["arrest", "shooting"],
@@ -350,5 +370,5 @@ if __name__ == "__main__":
     start_browser(
         params,
         "dfbcb7ae3c1dfe10e4db",
-        selector="#wrapper > div > div.page-content > main > div.item.item-pagination > ul > li.pagi-item.pagi-next > a",
+        selector=".nav-previous",
     )
